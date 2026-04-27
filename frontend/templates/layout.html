@@ -187,6 +187,18 @@
         <div class="modal-body video-body">
             <img id="modalVideoStream" src="" style="width: 100%; height: auto; border-radius: var(--radius-md);">
             <div class="live-indicator">● LIVE</div>
+            
+            <!-- Modal Gender Stats (Bottom Right) -->
+            <div id="modal-gender-stats" class="modal-gender-overlay" style="display: none;">
+                <div class="modal-info-box male">
+                    <i class="fas fa-male"></i>
+                    <span id="modal-male-count">0</span>
+                </div>
+                <div class="modal-info-box female">
+                    <i class="fas fa-female"></i>
+                    <span id="modal-female-count">0</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -322,16 +334,35 @@
     100% { opacity: 1; }
 }
 
-/* Loading Spinner */
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255,255,255,0.1);
-    border-top: 4px solid var(--primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+/* Modal Gender Overlay (Bottom Right) */
+.modal-gender-overlay {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 15px;
+    z-index: 20;
 }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.modal-info-box {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    padding: 8px 16px;
+    border-radius: 12px;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.modal-info-box.male { color: #60a5fa; border-bottom: 3px solid #60a5fa; }
+.modal-info-box.female { color: #f472b6; border-bottom: 3px solid #f472b6; }
+
+.modal-info-box i { font-size: 1.2rem; }
 </style>
 
 <script>
@@ -404,15 +435,29 @@
     }
 
     // Video Modal
+    let activeModalCamera = "";
+
     function openVideoModal(cameraName) {
+        activeModalCamera = cameraName;
         const modal = document.getElementById('videoModal');
         const stream = document.getElementById('modalVideoStream');
+        const genderStats = document.getElementById('modal-gender-stats');
+
         document.getElementById('videoModalTitle').innerText = `Live Stream: ${cameraName}`;
         stream.src = `/video_feed/${cameraName}`;
+        
+        // Show gender stats only for Room camera
+        if (cameraName === 'Room') {
+            genderStats.style.display = 'flex';
+        } else {
+            genderStats.style.display = 'none';
+        }
+
         modal.style.display = 'flex';
     }
 
     function closeVideoModal() {
+        activeModalCamera = "";
         const modal = document.getElementById('videoModal');
         const stream = document.getElementById('modalVideoStream');
         stream.src = ""; // Stop stream

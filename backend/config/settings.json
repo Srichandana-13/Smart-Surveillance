@@ -8,7 +8,7 @@
     "seatbelt_detection_threshold": 0.5,
     "camera_configs": {
         "Gate": {
-            "status": "active",
+            "status": "active", 
             "sensitivity": "high"
         },
         "Room": {

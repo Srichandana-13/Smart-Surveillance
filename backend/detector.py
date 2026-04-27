@@ -139,6 +139,9 @@ class SurveillanceDetector:
         """
         camera_name = camera_name or self.camera_name
         is_gate     = (camera_name == GATE_CAMERA)
+        is_room     = (camera_name == ROOM_CAMERA)
+        is_parking  = (camera_name == PARKING_CAMERA)
+
         # Use higher confidence for Room camera to avoid false positives (like chairs)
         # Use lower confidence for Gate/Parking to catch fast/distant vehicles
         conf_thresh = 0.45 if is_room else 0.25
@@ -199,7 +202,10 @@ class SurveillanceDetector:
             tid        = track.track_id
 
             x1, y1, x2, y2 = int(ltrb[0]), int(ltrb[1]), int(ltrb[2]), int(ltrb[3])
-            crop = frame[y1:y2, x1:x2]
+            # Ensure crop is within frame boundaries
+            y1_c, y2_c = max(0, y1), min(frame_h, y2)
+            x1_c, x2_c = max(0, x1), min(frame_w, x2)
+            crop = frame[y1_c:y2_c, x1_c:x2_c]
 
             # ── Number-plate OCR: Gate AND Parking cameras ─────────────
             plate_number = None
@@ -227,13 +233,26 @@ class SurveillanceDetector:
             # ── Gender classification (Room camera – persons only) ────
             gender = None
             if is_room and obj_type == 'person':
-                if crop.size > 0:
+                # Use the cached gender if available, else classify now
+                gender = self._gender_cache.get(tid)
+                if not gender and crop.size > 0:
                     gender = self.gender_classifier.classify(crop)
-                    # Update running male/female counts on crossing
+                
+                # Update running male/female counts on crossing
+                if event_type == 'Entry':
                     if gender == 'Male':
                         self.male_count += 1
                     elif gender == 'Female':
                         self.female_count += 1
+                else: # Exit
+                    # We can track exits if needed, but the user asked for 
+                    # "how many males and females have come" (total) 
+                    # and "how many are there in the room" (current).
+                    # So we should probably track exit counts too.
+                    if gender == 'Male':
+                        self.male_count = max(0, self.male_count - 1)
+                    elif gender == 'Female':
+                        self.female_count = max(0, self.female_count - 1)
 
             # ── Save evidence image ───────────────────────────────────
             sub_dir   = "persons" if obj_type == 'person' else "vehicles"
@@ -288,13 +307,13 @@ class SurveillanceDetector:
                             )
 
                 # ── Mobile Talking While Walking ──────────────────────────
-                if crop_p.size > 0:
-                    is_talking, muw_score, muw_dets = self.mobile_detector.detect_talking(crop_p)
+                if crop.size > 0:
+                    is_talking, muw_score, muw_dets = self.mobile_detector.detect_talking(crop)
                     if is_talking:
                         if tid not in self._mobile_walking_violations_cache:
                             violation_img = self.save_image(
                                 frame, f"mobile_walking_violation", "mobile_walking",
-                                x1_p, y1_p, x2_p, y2_p
+                                x1, y1, x2, y2
                             )
                             self.db.insert_mobile_walking_violation(
                                 violation_type="Unsafe Mobile Usage While Walking",
@@ -309,14 +328,14 @@ class SurveillanceDetector:
                 # ── Restricted Zone Detection ─────────────────────────────
                 zones = self.restricted_zones.get(camera_name, [])
                 # Use bottom-center of bounding box (feet position)
-                feet_pos = [(x1_p + x2_p) / 2, y2_p]
+                feet_pos = [(x1 + x2) / 2, y2]
                 
                 for zone in zones:
                     if self._is_in_zone(feet_pos, zone['polygon'], frame.shape):
                         if tid not in self._restricted_violations_cache:
                             violation_img = self.save_image(
                                 frame, f"restricted_entry", "restricted",
-                                x1_p, y1_p, x2_p, y2_p
+                                x1, y1, x2, y2
                             )
                             self.db.insert_restricted_zone_violation(
                                 violation_type=f"Restricted Pathway Entry ({zone['name']})",
@@ -330,7 +349,7 @@ class SurveillanceDetector:
 
                 # ── Sleeping Detection ────────────────────────────────────
                 # Horizontal orientation: width > height * 1.2 (heuristic)
-                is_horizontal = (x2_p - x1_p) > (y2_p - y1_p) * 1.1
+                is_horizontal = (x2 - x1) > (y2 - y1) * 1.1
                 
                 if is_horizontal:
                     if tid not in self._sleep_tracking:
@@ -341,7 +360,7 @@ class SurveillanceDetector:
                             if tid not in self._sleep_violations_cache:
                                 violation_img = self.save_image(
                                     frame, f"sleeping_on_duty", "sleep",
-                                    x1_p, y1_p, x2_p, y2_p
+                                    x1, y1, x2, y2
                                 )
                                 self.db.insert_sleep_violation(
                                     violation_type="Sleeping On Duty Alert",
@@ -475,8 +494,9 @@ class SurveillanceDetector:
             # ── PPE Visual Indicator ──────────────────────────────
             if obj_type == 'person':
                 ltrb_p = track.to_ltrb()
-                crop_p = frame[max(0, int(ltrb_p[1])):min(frame.shape[0], int(ltrb_p[3])),
-                               max(0, int(ltrb_p[0])):min(frame.shape[1], int(ltrb_p[2]))]
+                y1_p, y2_p = max(0, int(ltrb_p[1])), min(frame.shape[0], int(ltrb_p[3]))
+                x1_p, x2_p = max(0, int(ltrb_p[0])), min(frame.shape[1], int(ltrb_p[2]))
+                crop_p = frame[y1_p:y2_p, x1_p:x2_p]
                 
                 if crop_p.size > 0:
                     has_h, _, _ = self.helmet_detector.detect(crop_p)
@@ -516,17 +536,18 @@ class SurveillanceDetector:
                 if tid in self._sleep_tracking:
                     duration = time.time() - self._sleep_tracking[tid]
                     if duration > 10: # show status after 10s of lying down
-                        color = (0, 0, 255) if duration > 120 else (0, 165, 255)
-                        label = "SLEEPING!!" if duration > 120 else f"LYING DOWN: {int(duration)}s"
-                        cv2.putText(frame, label,
+                        color_s = (0, 0, 255) if duration > 120 else (0, 165, 255)
+                        label_s = "SLEEPING!!" if duration > 120 else f"LYING DOWN: {int(duration)}s"
+                        cv2.putText(frame, label_s,
                                     (int(ltrb[0]), int(ltrb[1]) - 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_s, 2)
 
             # ── Seatbelt Visual Indicator ─────────────────────────
             if obj_type in ['car', 'bus', 'truck']:
                 ltrb_v = track.to_ltrb()
-                crop_v = frame[max(0, int(ltrb_v[1])):min(frame.shape[0], int(ltrb_v[3])),
-                               max(0, int(ltrb_v[0])):min(frame.shape[1], int(ltrb_v[2]))]
+                y1_v, y2_v = max(0, int(ltrb_v[1])), min(frame.shape[0], int(ltrb_v[3]))
+                x1_v, x2_v = max(0, int(ltrb_v[0])), min(frame.shape[1], int(ltrb_v[2]))
+                crop_v = frame[y1_v:y2_v, x1_v:x2_v]
                 
                 if crop_v.size > 0:
                     has_s, _, _ = self.seatbelt_detector.detect(crop_v)
@@ -547,8 +568,9 @@ class SurveillanceDetector:
             # ── Mobile Usage Visual Indicator ─────────────────────
             if obj_type in ['car', 'bus', 'truck']:
                 ltrb_m = track.to_ltrb()
-                crop_m = frame[max(0, int(ltrb_m[1])):min(frame.shape[0], int(ltrb_m[3])),
-                               max(0, int(ltrb_m[0])):min(frame.shape[1], int(ltrb_m[2]))]
+                y1_m2, y2_m2 = max(0, int(ltrb_m[1])), min(frame.shape[0], int(ltrb_m[3]))
+                x1_m2, x2_m2 = max(0, int(ltrb_m[0])), min(frame.shape[1], int(ltrb_m[2]))
+                crop_m = frame[y1_m2:y2_m2, x1_m2:x2_m2]
                 
                 if crop_m.size > 0:
                     using_p, _, _ = self.mobile_detector.detect(crop_m)

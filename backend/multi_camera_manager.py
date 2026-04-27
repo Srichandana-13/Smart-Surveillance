@@ -34,6 +34,11 @@ class MultiCameraManager:
 
     # ─────────────────────────────────────────────────────────────────────
     def start_all(self):
+        # Ensure recordings directory exists
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        rec_dir = os.path.join(base_dir, 'recordings')
+        os.makedirs(rec_dir, exist_ok=True)
+
         for name, source in self.cameras.items():
             cam_source = int(source) if source.isdigit() else source
             thread = threading.Thread(
@@ -52,11 +57,24 @@ class MultiCameraManager:
         with self.lock:
             self.detectors[name] = detector
 
+        # Recording setup
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        rec_dir = os.path.join(base_dir, 'recordings')
+        video_writer = None
+        current_date = None
+
+        # ── Demonstration Fallback ──────────────────────────────────────────
+        # If it's the Room camera and the source is a placeholder, try webcam
+        actual_source = source
+        if name == "Room" and isinstance(source, str) and "placeholder" in source:
+            print(f"[CameraManager] Placeholder detected for {name}. Falling back to webcam (0) for demo.")
+            actual_source = 0
+
         while True:
-            cap = cv2.VideoCapture(source)
+            cap = cv2.VideoCapture(actual_source)
 
             if not cap.isOpened():
-                print(f"[CameraManager] Could not open {name}. Retrying in 5 s…")
+                print(f"[CameraManager] Could not open {name} (source: {actual_source}). Retrying in 5 s…")
                 with self.lock:
                     self.status[name] = "Offline"
                 time.sleep(5)
@@ -67,8 +85,7 @@ class MultiCameraManager:
 
             while True:
                 # Read multiple frames to clear the buffer and get the VERY LATEST one
-                # This ensures we don't process "old" laggy frames
-                for _ in range(5):
+                for _ in range(3):
                     cap.grab()
                 success, frame = cap.read()
 
@@ -83,10 +100,36 @@ class MultiCameraManager:
                     frame, camera_name=name
                 )
 
+                # ── Recording Logic ──────────────────────────────────────
+                now = time.localtime()
+                date_str = time.strftime("%Y-%m-%d", now)
+                
+                # Create/Rotate video writer daily
+                if video_writer is None or date_str != current_date:
+                    if video_writer is not None:
+                        video_writer.release()
+                    
+                    current_date = date_str
+                    time_str = time.strftime("%H-%M-%S", now)
+                    filename = f"{name}_{date_str}_{time_str}.mp4"
+                    filepath = os.path.join(rec_dir, filename)
+                    
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    h, w = processed_frame.shape[:2]
+                    video_writer = cv2.VideoWriter(filepath, fourcc, 10.0, (w, h))
+                    print(f"[CameraManager] Started recording: {filename}")
+
+                if video_writer is not None:
+                    video_writer.write(processed_frame)
+
                 with self.lock:
                     self.frames[name]  = processed_frame
                     self.counts[name]  = counts
                     self.status[name]  = "Online"
+
+            if video_writer is not None:
+                video_writer.release()
+                video_writer = None
 
             cap.release()
             time.sleep(2)
