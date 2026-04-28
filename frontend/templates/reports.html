@@ -86,7 +86,7 @@
         <canvas id="activityChart"></canvas>
     </div>
     <div class="chart-container">
-        <h4 style="margin-bottom:15px; font-size:0.85rem; font-weight:600;"><i class="fas fa-chart-pie"></i> Vehicle Distribution</h4>
+        <h4 style="margin-bottom:15px; font-size:0.85rem; font-weight:600;"><i class="fas fa-chart-pie"></i> Object Distribution</h4>
         <canvas id="vehicleDistChart"></canvas>
     </div>
 </div>
@@ -118,42 +118,59 @@
 <script>
     // Initialize Charts
     const ctxActivity = document.getElementById('activityChart').getContext('2d');
-    new Chart(ctxActivity, {
+    const activityChart = new Chart(ctxActivity, {
         type: 'line',
         data: {
-            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'],
-            datasets: [{
-                label: 'Activity Count',
-                data: [5, 2, 25, 45, 60, 30, 10],
-                borderColor: '#2563EB',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
+            labels: Array.from({length: 24}, (_, i) => String(i).padStart(2, '0') + ':00'),
+            datasets: [
+                {
+                    label: 'Human Activity',
+                    data: new Array(24).fill(0),
+                    borderColor: '#6366F1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Vehicle Activity',
+                    data: new Array(24).fill(0),
+                    borderColor: '#2563EB',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: { 
+                y: { beginAtZero: true, grid: { display: false } },
+                x: { grid: { display: false } }
+            }
         }
     });
 
     const ctxDist = document.getElementById('vehicleDistChart').getContext('2d');
-    new Chart(ctxDist, {
+    const distChart = new Chart(ctxDist, {
         type: 'doughnut',
         data: {
-            labels: ['Cars', 'Trucks', 'Bikes'],
+            labels: ['Humans', 'Cars', 'Trucks', 'Bikes'],
             datasets: [{
-                data: [60, 25, 15],
-                backgroundColor: ['#2563EB', '#10B981', '#F59E0B'],
+                data: [0, 0, 0, 0],
+                backgroundColor: ['#6366F1', '#2563EB', '#10B981', '#F59E0B'],
                 borderWidth: 0
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
+            plugins: { 
+                legend: { position: 'bottom' },
+                title: { display: false }
+            },
+            cutout: '70%'
         }
     });
 
@@ -161,11 +178,41 @@
         try {
             const resp = await fetch('/api/stats');
             const data = await resp.json();
+            
             document.getElementById('rep-entries').innerText = data.entries || 0;
             document.getElementById('rep-vehicles').innerText = data.vehicles || 0;
             document.getElementById('rep-ppe').innerText = (data.helmet_violations || 0) + (data.seatbelt_violations || 0);
             document.getElementById('rep-night').innerText = data.night_alerts || 0;
-        } catch (e) {}
+
+            // Update Line Chart
+            if (data.hourly_series) {
+                const humanData = new Array(24).fill(0);
+                const vehicleData = new Array(24).fill(0);
+                
+                for (let h = 0; h < 24; h++) {
+                    const hStr = String(h).padStart(2, '0');
+                    if (data.hourly_series[hStr]) {
+                        humanData[h] = data.hourly_series[hStr].humans || 0;
+                        vehicleData[h] = data.hourly_series[hStr].vehicles || 0;
+                    }
+                }
+                
+                activityChart.data.datasets[0].data = humanData;
+                activityChart.data.datasets[1].data = vehicleData;
+                activityChart.update();
+            }
+
+            // Update Distribution Chart
+            distChart.data.datasets[0].data = [
+                data.humans || 0,
+                data.cars || 0,
+                data.trucks || 0,
+                data.bikes || 0
+            ];
+            distChart.update();
+        } catch (e) {
+            console.error("Failed to load report stats:", e);
+        }
     }
     loadReportStats();
 </script>

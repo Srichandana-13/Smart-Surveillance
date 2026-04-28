@@ -595,11 +595,38 @@ class DatabaseManager:
         )
         sleep_violations = cursor.fetchone()[0]
 
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE object_type='person'")
+        humans = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE object_type='car'")
+        cars = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE object_type='truck'")
+        trucks = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE object_type IN ('motorcycle', 'bicycle')")
+        bikes = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT substr(time, 1, 2) AS hour, 
+                   SUM(CASE WHEN object_type='person' THEN 1 ELSE 0 END) as humans,
+                   SUM(CASE WHEN object_type IN ('car','truck','bus','motorcycle') THEN 1 ELSE 0 END) as vehicles
+            FROM detections
+            WHERE date = ?
+            GROUP BY hour
+        """, (datetime.now().strftime("%Y-%m-%d"),))
+        rows = cursor.fetchall()
+        hourly_series = {row[0]: {"humans": row[1], "vehicles": row[2]} for row in rows}
+
         conn.close()
         return {
             'entries':           entries,
             'exits':             exits,
             'vehicles':          vehicles,
+            'humans':            humans,
+            'cars':              cars,
+            'trucks':            trucks,
+            'bikes':             bikes,
             'night_alerts':      night_alerts,
             'helmet_violations': helmet_violations,
             'seatbelt_violations': seatbelt_violations,
@@ -607,6 +634,7 @@ class DatabaseManager:
             'mobile_walking_violations': mobile_walking_violations,
             'restricted_violations': restricted_violations,
             'sleep_violations': sleep_violations,
+            'hourly_series':     hourly_series
         }
 
     # ─────────────────────────────────────────────────────────────────────
