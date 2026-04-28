@@ -646,3 +646,27 @@ class DatabaseManager:
         rows = cursor.fetchall()
         conn.close()
         return rows
+
+    def clear_all_history(self):
+        """Truncate all history and violation tables."""
+        tables = [
+            'detections', 'ppe_violations', 'seatbelt_violations',
+            'mobile_usage', 'mobile_walking_logs', 'restricted_zone_logs',
+            'sleep_detection_logs', 'night_alerts'
+        ]
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        for table in tables:
+            cursor.execute(f"DELETE FROM {table}")
+        conn.commit()
+        conn.close()
+        return True
+
+    def delete_detection(self, detection_id):
+        """Delete a single detection record by ID."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM detections WHERE id = ?", (detection_id,))
+        conn.commit()
+        conn.close()
+        return True

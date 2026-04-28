@@ -37,7 +37,10 @@
         <p style="color: var(--text-muted); font-size: 0.9rem;">Real-time execution logs and AI event auditing.</p>
     </div>
     <div style="display:flex; gap:10px;">
-        <button class="btn" onclick="clearLogs()" style="background:var(--danger); color:white; border:none; padding:10px 20px; border-radius:var(--radius-sm); font-weight:600; cursor:pointer;">
+        <button class="btn" onclick="clearAllData()" style="background:var(--danger); color:white; border:none; padding:10px 20px; border-radius:var(--radius-sm); font-weight:600; cursor:pointer; opacity:0.9;">
+            <i class="fas fa-database"></i> Clear All Data
+        </button>
+        <button class="btn" onclick="clearLogs()" style="background:#475569; color:white; border:none; padding:10px 20px; border-radius:var(--radius-sm); font-weight:600; cursor:pointer;">
             <i class="fas fa-trash-alt"></i> Clear Console
         </button>
     </div>
@@ -78,6 +81,22 @@
                 }).join('');
             }
         } catch (e) {}
+    }
+
+    async function clearAllData() {
+        if (confirm("Are you sure you want to permanently delete ALL detection history and violations from the database? This cannot be undone.")) {
+            try {
+                const resp = await fetch('/api/clear_history', { method: 'POST' });
+                const result = await resp.json();
+                if (result.status === 'success') {
+                    alert("All history cleared successfully.");
+                    clearLogs();
+                    location.reload(); // Refresh to update stats and views
+                }
+            } catch (e) {
+                alert("Error clearing history.");
+            }
+        }
     }
 
     function clearLogs() {

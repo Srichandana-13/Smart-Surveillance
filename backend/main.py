@@ -291,6 +291,18 @@ def activity_feed():
     return jsonify(feed[:15])
 
 
+@app.route('/api/clear_history', methods=['POST'])
+def clear_history():
+    db.clear_all_history()
+    return jsonify({"status": "success", "message": "All history cleared"})
+
+
+@app.route('/api/detections/<int:det_id>', methods=['DELETE'])
+def delete_detection(det_id):
+    db.delete_detection(det_id)
+    return jsonify({"status": "success", "message": f"Detection {det_id} deleted"})
+
+
 @app.route('/api/stats')
 def get_global_stats():
     stats = db.get_global_stats()
