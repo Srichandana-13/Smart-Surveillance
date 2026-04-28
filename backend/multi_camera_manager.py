@@ -66,18 +66,35 @@ class MultiCameraManager:
         # ── Demonstration Fallback ──────────────────────────────────────────
         # If it's the Room camera and the source is a placeholder, try webcam
         actual_source = source
-        if name == "Room" and isinstance(source, str) and "placeholder" in source:
-            print(f"[CameraManager] Placeholder detected for {name}. Falling back to webcam (0) for demo.")
-            actual_source = 0
+        is_placeholder = isinstance(source, str) and "placeholder" in source
+        
+        if is_placeholder:
+            if name == "Room":
+                print(f"[CameraManager] Placeholder detected for {name}. Falling back to webcam (0) for demo.")
+                actual_source = 0
+            else:
+                print(f"[CameraManager] {name} using placeholder source. Setting to 'Offline' and silencing connection noise.")
+                with self.lock:
+                    self.status[name] = "Offline"
+                # For non-Room placeholders that aren't using webcam, we don't need to loop-retry
+                return
 
         while True:
             cap = cv2.VideoCapture(actual_source)
 
+            # Verification of source opening
             if not cap.isOpened():
-                print(f"[CameraManager] Could not open {name} (source: {actual_source}). Retrying in 5 s…")
+                if is_placeholder and name != "Room":
+                   # This should have been caught by the return above, 
+                   # but just as a safety measure for other types of bad sources:
+                   with self.lock:
+                       self.status[name] = "Offline"
+                   return
+                
+                print(f"[CameraManager] Could not open {name} (source: {actual_source}). Retrying in 10 s…")
                 with self.lock:
                     self.status[name] = "Offline"
-                time.sleep(5)
+                time.sleep(10)
                 continue
 
             with self.lock:

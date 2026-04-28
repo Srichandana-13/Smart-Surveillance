@@ -49,8 +49,9 @@ class GenderClassifier:
                 print(f"[GenderClassifier] DNN load failed: {e}. "
                       "Using heuristic fallback.")
         else:
-            print("[GenderClassifier] Model files not found in "
-                  f"'{models_dir}'. Using heuristic fallback.")
+            # Subtle notice, only log once during initialization
+            # print("[GenderClassifier] Model files not found. Using heuristic fallback.")
+            pass
 
     # ──────────────────────────────────────────────────────────────────────
     def classify(self, person_crop: np.ndarray) -> str:
