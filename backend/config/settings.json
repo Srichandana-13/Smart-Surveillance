@@ -1,23 +1,9 @@
 {
-    "theme": "light",
-    "sound_alerts": true,
-    "night_mode_start": "20:00",
-    "night_mode_end": "06:00",
-    "people_limit": 50,
     "helmet_detection_threshold": 0.5,
     "seatbelt_detection_threshold": 0.5,
-    "camera_configs": {
-        "Gate": {
-            "status": "active", 
-            "sensitivity": "high"
-        },
-        "Room": {
-            "status": "active",
-            "sensitivity": "medium"
-        },
-        "Parking": {
-            "status": "active",
-            "sensitivity": "low"
-        }
-    }
+    "people_limit": 50,
+    "night_mode_start": "20:00",
+    "night_mode_end": "06:00",
+    "sound_alerts": true,
+    "theme": "light"
 }
