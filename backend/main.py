@@ -168,6 +168,10 @@ def video_feed(camera_name):
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n'
                    + buffer.tobytes() + b'\r\n')
+            
+            # Prevent extreme CPU looping
+            import time
+            time.sleep(0.03)
 
     return Response(gen_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')

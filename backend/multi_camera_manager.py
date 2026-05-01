@@ -84,7 +84,10 @@ class MultiCameraManager:
             return
 
         while True:
-            cap = cv2.VideoCapture(actual_source)
+            if isinstance(actual_source, int) or actual_source == 0:
+                cap = cv2.VideoCapture(actual_source, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(actual_source)
 
             # Verification of source opening
             if not cap.isOpened():
