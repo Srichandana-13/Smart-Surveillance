@@ -66,6 +66,9 @@ class SurveillanceDetector:
         self._sleep_tracking = {} # tid -> start_time
         self._sleep_violations_cache = {} # tid -> bool
 
+        # ── History logging for presence ─────────────────────────────────
+        self._logged_tracks = set()
+
         # ── Change 6: Restricted Zones ──────────────────────────────────
         self.restricted_zones = self._load_restricted_zones()
         self.target_classes = {
@@ -420,6 +423,34 @@ class SurveillanceDetector:
             ltrb     = track.to_ltrb()
             obj_type = self.target_classes.get(track.get_det_class(), "unknown")
             tid      = track.track_id
+
+            # ── Log presence for room camera ──────────────────────────────
+            if is_room and obj_type == 'person' and tid not in self._logged_tracks:
+                self._logged_tracks.add(tid)
+                x1, y1, x2, y2 = map(int, ltrb)
+                y1_c, y2_c = max(0, y1), min(frame.shape[0], y2)
+                x1_c, x2_c = max(0, x1), min(frame.shape[1], x2)
+                crop = frame[y1_c:y2_c, x1_c:x2_c]
+                
+                img_path = self.save_image(frame, "person", "persons")
+                
+                quick_gender = None
+                if crop.size > 0:
+                    quick_gender = self.gender_classifier.classify(crop)
+                
+                self.db.insert_detection(
+                    object_type="person",
+                    image_path=img_path,
+                    event_type="Presence",
+                    track_id=tid,
+                    plate_number=None,
+                    camera_name=camera_name,
+                    speed_kmh=None,
+                    gender=quick_gender,
+                    plate_img_path=None
+                )
+                self.log_system_event(f"EVENT: person (Presence) at {camera_name} | Gender: {quick_gender}")
+
             color    = (0, 255, 0) if obj_type == 'person' else (255, 165, 0)
 
             cv2.rectangle(
