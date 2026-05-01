@@ -239,22 +239,6 @@ class SurveillanceDetector:
                 gender = self._gender_cache.get(tid)
                 if not gender and crop.size > 0:
                     gender = self.gender_classifier.classify(crop)
-                
-                # Update running male/female counts on crossing
-                if event_type == 'Entry':
-                    if gender == 'Male':
-                        self.male_count += 1
-                    elif gender == 'Female':
-                        self.female_count += 1
-                else: # Exit
-                    # We can track exits if needed, but the user asked for 
-                    # "how many males and females have come" (total) 
-                    # and "how many are there in the room" (current).
-                    # So we should probably track exit counts too.
-                    if gender == 'Male':
-                        self.male_count = max(0, self.male_count - 1)
-                    elif gender == 'Female':
-                        self.female_count = max(0, self.female_count - 1)
 
             # ── Save evidence image ───────────────────────────────────
             sub_dir   = "persons" if obj_type == 'person' else "vehicles"
@@ -601,6 +585,18 @@ class SurveillanceDetector:
         cv2.putText(frame, "ENTRY / EXIT BOUNDARY",
                     (10, line_y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+        if is_room:
+            m_count = 0
+            f_count = 0
+            for tid in active_ids:
+                g = self._gender_cache.get(tid)
+                if g == 'Male':
+                    m_count += 1
+                elif g == 'Female':
+                    f_count += 1
+            self.male_count = m_count
+            self.female_count = f_count
 
         return frame, (in_count, out_count)
 

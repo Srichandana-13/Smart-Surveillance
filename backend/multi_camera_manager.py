@@ -63,34 +63,31 @@ class MultiCameraManager:
         video_writer = None
         current_date = None
 
-        # ── Demonstration Fallback ──────────────────────────────────────────
-        # If it's the Room camera and the source is a placeholder, try webcam
+        # ── Source Validation & Demonstration Fallback ─────────────────────
         actual_source = source
-        is_placeholder = isinstance(source, str) and "placeholder" in source
+        is_valid = False
         
-        if is_placeholder:
-            if name == "Room":
-                print(f"[CameraManager] Placeholder detected for {name}. Falling back to webcam (0) for demo.")
+        # Check if source is a valid integer (e.g. 0 for webcam)
+        if isinstance(source, int):
+            is_valid = True
+        elif isinstance(source, str):
+            if source.startswith("rtsp://") and "placeholder" not in source:
+                is_valid = True
+            elif source == "0":
                 actual_source = 0
-            else:
-                print(f"[CameraManager] {name} using placeholder source. Setting to 'Offline' and silencing connection noise.")
-                with self.lock:
-                    self.status[name] = "Offline"
-                # For non-Room placeholders that aren't using webcam, we don't need to loop-retry
-                return
+                is_valid = True
+
+        if not is_valid:
+            print(f"[CameraManager] Invalid or placeholder source for {name}: '{source}'. Setting Offline.")
+            with self.lock:
+                self.status[name] = "Offline"
+            return
 
         while True:
             cap = cv2.VideoCapture(actual_source)
 
             # Verification of source opening
             if not cap.isOpened():
-                if is_placeholder and name != "Room":
-                   # This should have been caught by the return above, 
-                   # but just as a safety measure for other types of bad sources:
-                   with self.lock:
-                       self.status[name] = "Offline"
-                   return
-                
                 print(f"[CameraManager] Could not open {name} (source: {actual_source}). Retrying in 10 s…")
                 with self.lock:
                     self.status[name] = "Offline"
@@ -101,9 +98,11 @@ class MultiCameraManager:
                 self.status[name] = "Online"
 
             while True:
-                # Read multiple frames to clear the buffer and get the VERY LATEST one
-                for _ in range(3):
-                    cap.grab()
+                # For network streams (RTSP), skip frames to get the latest one
+                if isinstance(actual_source, str) and actual_source.startswith("rtsp://"):
+                    for _ in range(3):
+                        cap.grab()
+                
                 success, frame = cap.read()
 
                 if not success:
