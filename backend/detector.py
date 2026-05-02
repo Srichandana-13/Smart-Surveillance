@@ -488,22 +488,22 @@ class SurveillanceDetector:
                             self._gender_history[tid] = []
                         self._gender_history[tid].append(g)
                         
-                        # Once we have 5+ readings, take the most common one
-                        if len(self._gender_history[tid]) >= 5:
-                            m_count = self._gender_history[tid].count('Male')
-                            f_count = self._gender_history[tid].count('Female')
-                            self._gender_cache[tid] = 'Male' if m_count >= f_count else 'Female'
+                # Once we have 10+ readings, take the most common one
+                if len(self._gender_history[tid]) >= 10:
+                    m_count = self._gender_history[tid].count('Male')
+                    f_count = self._gender_history[tid].count('Female')
+                    self._gender_cache[tid] = 'Male' if m_count >= f_count else 'Female'
                 
                 g = self._gender_cache.get(tid, "Analyzing...")
                 label += f"  {g}"
                 
-                # Colour-code: Blue for Male, Magenta for Female, Gray for Analyzing
+                # Colour-code: Blue for Male, Rose for Female, Gray for Analyzing
                 if g == 'Male':
-                    color = (255, 120, 0)
+                    color = (255, 120, 0) # Blue
                 elif g == 'Female':
-                    color = (180, 0, 255)
+                    color = (147, 112, 219) # Medium Purple / Rose
                 else:
-                    color = (150, 150, 150)
+                    color = (200, 200, 200) # Light Gray
 
                 cv2.rectangle(frame, (int(ltrb[0]), int(ltrb[1])), 
                               (int(ltrb[2]), int(ltrb[3])), color, 2)
