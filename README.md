@@ -114,5 +114,5 @@ python backend/main.py
 - **System Stability**: Real-time health monitoring ensures the AI engine runs within hardware limits.
 
 ---
-**Crafted for Innovation by [VishnuVardhanCodes](https://github.com/VishnuVardhanCodes) | ITC Internship 2026**
+**Crafted for Innovation by [Srichandana-13](https://github.com/Srichandana-13) | ITC Internship 2026**
 **Corporate Identity: ITC PSPD BCM Division**
